@@ -2,7 +2,7 @@ CHART NAME: {{ .Chart.Name }}
 CHART VERSION: {{ .Chart.Version }}
 APP VERSION: {{ .Chart.AppVersion }}
 
-{{- if or .Values.postgresql.enabled .Values.externalDatabase.host }}
+{{- if or .Values.cnpCluster.enabled .Values.externalDatabase.host }}
 
 ** Please be patient while the chart is being deployed **
 

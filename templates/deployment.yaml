@@ -1,14 +1,10 @@
-{{- /*
-Copyright VMware, Inc.
-SPDX-License-Identifier: APACHE-2.0
-*/}}
-
 apiVersion: {{ include "common.capabilities.deployment.apiVersion" . }}
 kind: Deployment
 metadata:
   name: {{ include "common.names.fullname" . }}
   namespace: {{ include "common.names.namespace" . | quote }}
   labels: {{- include "common.labels.standard" ( dict "customLabels" .Values.commonLabels "context" $ ) | nindent 4 }}
+    app.kubernetes.io/component: gitea
   {{- if .Values.commonAnnotations }}
   annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
   {{- end }}
@@ -19,10 +15,11 @@ spec:
   {{- if .Values.updateStrategy }}
   strategy: {{- toYaml .Values.updateStrategy | nindent 4 }}
   {{- end }}
-  replicas: 1
+  replicas: {{ .Values.replicaCount }}
   template:
     metadata:
       labels: {{- include "common.labels.standard" ( dict "customLabels" $podLabels "context" $ ) | nindent 8 }}
+        app.kubernetes.io/component: gitea
       {{- if .Values.podAnnotations }}
       annotations: {{- include "common.tplvalues.render" (dict "value" .Values.podAnnotations "context" $) | nindent 8 }}
       {{- end }}
@@ -63,6 +60,54 @@ spec:
         {{- if .Values.initContainers }}
         {{- include "common.tplvalues.render" (dict "value" .Values.initContainers "context" $) | nindent 8 }}
         {{- end }}
+        {{- if .Values.cnpCluster.enabled }}
+        # Wait for CNP cluster to be ready
+        # This init container is for avoiding CrashLoopback errors in the Hub container because the PostgreSQL container is not ready
+        - name: wait-for-db
+          image: {{ include "common.images.image" (dict "imageRoot" .Values.auxiliaryImage "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.auxiliaryImage.pullPolicy }}
+          command:
+            - /bin/bash
+          args:
+            - -ec
+            - |
+              #!/bin/bash
+              set -o errexit
+              set -o nounset
+              set -o pipefail
+
+              echo "Waiting for PostgreSQL to be ready..."
+              until pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER"; do
+                echo "PostgreSQL is unavailable - sleeping"
+                sleep 2
+              done
+              echo "PostgreSQL is ready!"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            privileged: false
+            readOnlyRootFilesystem: false
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          env:
+            - name: DB_HOST
+              value: {{ include "gitea.database.host" . | quote }}
+            - name: DB_PORT
+              value: {{ include "gitea.database.port" . | quote }}
+            - name: DB_USER
+              value: {{ include "gitea.database.username" . | quote }}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "gitea.databaseSecretName" . }}
+                  key: {{ include "gitea.databaseSecretKey" . }}
+        {{- end }}
+
         {{- if and .Values.volumePermissions.enabled .Values.persistence.enabled }}
         - name: volume-permissions
           image: {{ include "gitea.volumePermissions.image" . }}
@@ -108,8 +153,6 @@ spec:
               value: "Europe/Paris"
             - name: GITEA__server__HTTP_PORT
               value: {{ .Values.containerPorts.http | quote }}
-            - name: GITEA__server__SSL_MIN_VERSION
-              value: "TLSv1.2"
             - name: GITEA__server__SSH_LISTEN_PORT
               value: {{ .Values.containerPorts.ssh | quote }}
             - name: GITEA__server__SSH_PORT
@@ -117,42 +160,46 @@ spec:
             - name: GITEA__database__DB_TYPE
               value: "postgres"
             - name: GITEA__database__HOST
-              value: "{{ include "gitea.databaseHost" . }}:{{ include "gitea.databasePort" . }}"
+              value: "{{ include "gitea.database.host" . }}:{{ include "gitea.database.port" . }}"
             - name: GITEA__database__NAME
-              value: {{ include "gitea.databaseName" . | quote }}
+              value: {{ include "gitea.database.name" . | quote }}
             - name: GITEA__database__USER
-              value: {{ include "gitea.databaseUser" . | quote }}
+              value: {{ include "gitea.database.username" . | quote }}
             - name: GITEA__database__PASSWD
               valueFrom:
                 secretKeyRef:
                   name: {{ include "gitea.databaseSecretName" . }}
-                  key: {{ include "gitea.databasePasswordKey" . | quote }}
+                  key: {{ include "gitea.databaseSecretKey" . | quote }}
             - name: GITEA__server__START_SSH_SERVER
               value: "true"
+            {{- if .Values.smtp.enabled }}
             - name: GITEA__mailer__ENABLED
               value: "true"
-            {{- if .Values.smtpHost }}
             - name: GITEA__mailer__SMTP_ADDR
-              value: {{ .Values.smtpHost | quote }}
-            {{- end }}
-            {{- if .Values.smtpPort }}
+              value: {{ .Values.smtp.host | quote }}
             - name: GITEA__mailer__SMTP_PORT
-              value: {{ .Values.smtpPort | quote }}
-            {{- end }}
-            {{- if .Values.smtpFrom }}
+              value: {{ .Values.smtp.port | quote }}
             - name: GITEA__mailer__FROM
-              value: {{ .Values.smtpFrom | quote }}
-            {{- end }}
-            {{- if .Values.smtpUser }}
+              value: {{ .Values.smtp.from | quote }}
             - name: GITEA__mailer__USER
-              value: {{ .Values.smtpUser | quote }}
-            {{- end }}
-            {{- if or .Values.smtpPassword .Values.smtpExistingSecret }}
+              value: {{ .Values.smtp.username | quote }}
+            {{- if or .Values.smtp.password .Values.smtp.existingSecret }}
             - name: GITEA__mailer__PASSWD
               valueFrom:
                 secretKeyRef:
                   name: {{ include "gitea.smtpSecretName" . }}
                   key: smtp-password
+            {{- end }}
+            {{- end }}
+            {{- if .Values.tls.enabled }}
+            - name: GITEA__server__CERT_FILE
+              value: /certs/tls.crt
+            - name: GITEA__server__KEY_FILE
+              value: /certs/tls.key
+            - name: GITEA__server__PROTOCOL
+              value: https
+            - name: GITEA__server__SSL_MIN_VERSION
+              value: TLSv1.2
             {{- end }}
             {{- if .Values.extraEnvVars }}
             {{- include "common.tplvalues.render" (dict "value" .Values.extraEnvVars "context" $) | nindent 12 }}
@@ -181,7 +228,7 @@ spec:
             httpGet:
               path: {{ .Values.startupProbe.path }}
               port: http
-              scheme: HTTPS
+              scheme: {{ ternary "HTTPS" "HTTP" .Values.tls.enabled | quote }}
             initialDelaySeconds: {{ .Values.startupProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.startupProbe.periodSeconds }}
             timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds }}
@@ -195,7 +242,7 @@ spec:
             httpGet:
               path: {{ .Values.livenessProbe.path }}
               port: http
-              scheme: HTTPS
+              scheme: {{ ternary "HTTPS" "HTTP" .Values.tls.enabled | quote }}
             initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
             timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
@@ -209,7 +256,7 @@ spec:
             httpGet:
               path: {{ .Values.readinessProbe.path }}
               port: http
-              scheme: HTTPS
+              scheme: {{ ternary "HTTPS" "HTTP" .Values.tls.enabled | quote }}
             initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
             timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
@@ -226,6 +273,11 @@ spec:
               mountPath: /var/lib/gitea
             - name: config
               mountPath: /etc/gitea
+          {{- if .Values.tls.enabled }}
+            - name: certificates
+              mountPath: /certs
+              readOnly: true
+          {{- end }}
             {{- if .Values.extraVolumeMounts }}
             {{- include "common.tplvalues.render" (dict "value" .Values.extraVolumeMounts "context" $) | nindent 12 }}
             {{- end }}
@@ -233,6 +285,12 @@ spec:
         {{- include "common.tplvalues.render" (dict "value" .Values.sidecars "context" $) | nindent 8 }}
         {{- end }}
       volumes:
+        {{- if .Values.tls.enabled }}
+        - name: certificates
+          secret:
+            secretName: {{ include "common.names.fullname" . }}-crt
+            defaultMode: 420
+        {{- end }}
         - name: data
           {{- if .Values.persistence.enabled }}
           persistentVolumeClaim:

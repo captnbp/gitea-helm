@@ -1,9 +1,4 @@
 {{/*
-Copyright VMware, Inc.
-SPDX-License-Identifier: APACHE-2.0
-*/}}
-
-{{/*
 Create a default fully qualified postgresql name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
 */}}
@@ -90,85 +85,158 @@ Gitea credential secret name
 Return the SMTP Secret Name
 */}}
 {{- define "gitea.smtpSecretName" -}}
-{{- if .Values.smtpExistingSecret }}
-    {{- print .Values.smtpExistingSecret -}}
+{{- if .Values.smtp.existingSecret }}
+    {{- print .Values.smtp.existingSecret -}}
 {{- else -}}
     {{- print (include "common.names.fullname" .) -}}
 {{- end -}}
 {{- end -}}
 
 {{/*
-Return the PostgreSQL Hostname
+Return the CNP cluster fullname
 */}}
-{{- define "gitea.databaseHost" -}}
-{{- if .Values.postgresql.enabled }}
-    {{- if eq .Values.postgresql.architecture "replication" }}
-        {{- printf "%s-%s" (include "gitea.postgresql.fullname" .) "primary" | trunc 63 | trimSuffix "-" -}}
-    {{- else -}}
-        {{- print (include "gitea.postgresql.fullname" .) -}}
-    {{- end -}}
+{{- define "gitea.cnp.fullname" -}}
+{{- if .Values.cnpCluster.name -}}
+{{- .Values.cnpCluster.name | trunc 63 | trimSuffix "-" -}}
 {{- else -}}
-    {{- print .Values.externalDatabase.host -}}
+{{- printf "%s-postgresql" (include "common.names.fullname" .) | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 {{- end -}}
 
 {{/*
-Return the PostgreSQL Port
+Return the CNP cluster service name (read-write)
 */}}
-{{- define "gitea.databasePort" -}}
-{{- if .Values.postgresql.enabled }}
-    {{- print .Values.postgresql.primary.service.ports.postgresql -}}
+{{- define "gitea.cnp.serviceName" -}}
+{{- printf "%s-rw" (include "gitea.cnp.fullname" .) -}}
+{{- end -}}
+
+{{/*
+Return the CNP secret name
+*/}}
+{{- define "gitea.cnp.secretName" -}}
+{{- if .Values.cnpCluster.database.existingSecret -}}
+{{- .Values.cnpCluster.database.existingSecret -}}
 {{- else -}}
-    {{- printf "%d" (.Values.externalDatabase.port | int ) -}}
+{{- printf "%s-app" (include "gitea.cnp.fullname" .) -}}
 {{- end -}}
 {{- end -}}
 
 {{/*
-Return the PostgreSQL Database Name
+Return the CNP database password
 */}}
-{{- define "gitea.databaseName" -}}
-{{- if .Values.postgresql.enabled }}
-    {{- print .Values.postgresql.auth.database -}}
+{{- define "gitea.cnp.password" -}}
+{{- $secretData := (lookup "v1" "Secret" $.Release.Namespace (include "gitea.cnp.secretName" .)).data }}
+{{- if and $secretData (hasKey $secretData "password") }}
+{{- index $secretData "password" | b64dec }}
+{{- else }}
+{{- randAlphaNum 32 }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Get the database host
+*/}}
+{{- define "gitea.database.host" -}}
+{{- if .Values.cnpCluster.enabled -}}
+{{- $releaseNamespace := .Release.Namespace }}
+{{- $clusterDomain := .Values.clusterDomain }}
+{{- $serviceName := include "gitea.cnp.serviceName" . }}
+{{- printf "%s.%s.svc.%s" $serviceName $releaseNamespace $clusterDomain -}}
 {{- else -}}
-    {{- print .Values.externalDatabase.database -}}
+{{- .Values.externalDatabase.host -}}
 {{- end -}}
 {{- end -}}
 
 {{/*
-Return the PostgreSQL User
+Get the database port
 */}}
-{{- define "gitea.databaseUser" -}}
-{{- if .Values.postgresql.enabled }}
-    {{- print .Values.postgresql.auth.username -}}
+{{- define "gitea.database.port" -}}
+{{- if .Values.cnpCluster.enabled -}}
+5432
 {{- else -}}
-    {{- print .Values.externalDatabase.user -}}
+{{- .Values.externalDatabase.port -}}
 {{- end -}}
 {{- end -}}
 
 {{/*
-Return the PostgreSQL Secret Name
+Get the database name
+*/}}
+{{- define "gitea.database.name" -}}
+{{- if .Values.cnpCluster.enabled -}}
+{{- .Values.cnpCluster.database.name -}}
+{{- else -}}
+{{- .Values.externalDatabase.database -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Get the database username
+*/}}
+{{- define "gitea.database.username" -}}
+{{- if .Values.cnpCluster.enabled -}}
+{{- .Values.cnpCluster.database.username -}}
+{{- else -}}
+{{- .Values.externalDatabase.username -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Get the Postgresql credentials secret.
 */}}
 {{- define "gitea.databaseSecretName" -}}
-{{- if .Values.postgresql.enabled }}
-    {{- if .Values.postgresql.auth.existingSecret -}}
-    {{- print .Values.postgresql.auth.existingSecret -}}
-    {{- else -}}
-    {{- print (include "gitea.postgresql.fullname" .) -}}
-    {{- end -}}
-{{- else if .Values.externalDatabase.existingSecret -}}
-    {{- print .Values.externalDatabase.existingSecret -}}
+{{- if .Values.cnpCluster.enabled -}}
+{{- include "gitea.cnp.secretName" . -}}
 {{- else -}}
-    {{- printf "%s-%s" (include "common.names.fullname" .) "externaldb" -}}
+{{- default (printf "%s-externaldb" .Release.Name) (tpl .Values.externalDatabase.existingSecret $) -}}
 {{- end -}}
 {{- end -}}
 
 {{/*
-Return the database password key
+Add environment variables to configure database values
 */}}
-{{- define "gitea.databasePasswordKey" -}}
-{{- if .Values.postgresql.enabled -}}
-{{- print "password" -}}
+{{- define "gitea.databaseSecretKey" -}}
+{{- if .Values.cnpCluster.enabled -}}
+    {{- print "password" -}}
 {{- else -}}
-{{ print .Values.externalDatabase.existingSecretPasswordKey }}
+    {{- if .Values.externalDatabase.existingSecret -}}
+        {{- if .Values.externalDatabase.existingSecretPasswordKey -}}
+            {{- printf "%s" .Values.externalDatabase.existingSecretPasswordKey -}}
+        {{- else -}}
+            {{- print "password" -}}
+        {{- end -}}
+    {{- else -}}
+        {{- print "password" -}}
+    {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Return true if cert-manager required annotations for TLS signed certificates are set in the Ingress annotations
+Ref: https://cert-manager.io/docs/usage/ingress/#supported-annotations
+*/}}
+{{- define "gitea.ingress.certManagerRequest" -}}
+{{ if or (hasKey . "cert-manager.io/cluster-issuer") (hasKey . "cert-manager.io/issuer") }}
+    {{- true -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Return true if a TLS credentials secret object should be created
+*/}}
+{{- define "gitea.createTlsSecret" -}}
+{{- if and (not .Values.tls.existingSecret) .Values.tls.enabled }}
+    {{- true -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Return the TLS secret name
+*/}}
+{{- define "gitea.issuerName" -}}
+{{- $issuerName := .Values.tls.issuerRef.existingIssuerName -}}
+{{- if $issuerName -}}
+    {{- printf "%s" (tpl $issuerName $) -}}
+{{- else -}}
+    {{- printf "%s-http" (include "common.names.fullname" .) -}}
 {{- end -}}
 {{- end -}}

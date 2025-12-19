@@ -3,5 +3,6 @@
 .vscode
 .DS_Store
 values-test.yaml
+values-*
 charts
 artifacthub-repo.yml

@@ -1,8 +1,3 @@
-{{- /*
-Copyright VMware, Inc.
-SPDX-License-Identifier: APACHE-2.0
-*/}}
-
 {{- if .Values.ingress.enabled }}
 apiVersion: {{ include "common.capabilities.ingress.apiVersion" . }}
 kind: Ingress
@@ -10,12 +5,21 @@ metadata:
   name: {{ template "common.names.fullname" . }}
   namespace: {{ include "common.names.namespace" . | quote }}
   labels: {{- include "common.labels.standard" ( dict "customLabels" .Values.commonLabels "context" $ ) | nindent 4 }}
-  {{- if or .Values.ingress.annotations .Values.commonAnnotations }}
-  {{- $annotations := include "common.tplvalues.merge" ( dict "values" ( list .Values.ingress.annotations .Values.commonAnnotations ) "context" . ) }}
-  annotations: {{- include "common.tplvalues.render" ( dict "value" $annotations "context" $) | nindent 4 }}
-  {{- end }}
+    app.kubernetes.io/component: gitea
+  annotations:
+    {{- if or .Values.ingress.annotations .Values.commonAnnotations }}
+    {{- $annotations := include "common.tplvalues.merge" ( dict "values" ( list .Values.ingress.annotations .Values.commonAnnotations ) "context" . ) }}
+    {{- include "common.tplvalues.render" ( dict "value" $annotations "context" $) | nindent 4 }}
+    {{- end }}
+    {{- if and (eq .Values.ingress.ingressControllerType "nginx") .Values.tls.enabled }}
+    nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+    nginx.ingress.kubernetes.io/proxy-ssl-name: {{ include "common.names.fullname" . }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}
+    nginx.ingress.kubernetes.io/proxy-ssl-secret: {{ .Release.Namespace }}/{{ include "common.names.fullname" . }}-crt
+    nginx.ingress.kubernetes.io/proxy-ssl-server-name: {{ include "common.names.fullname" . }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}
+    nginx.ingress.kubernetes.io/proxy-ssl-verify: "true"
+    {{- end }}
 spec:
-  {{- if and .Values.ingress.ingressClassName (eq "true" (include "common.ingress.supportsIngressClassname" .)) }}
+  {{- if .Values.ingress.ingressClassName }}
   ingressClassName: {{ .Values.ingress.ingressClassName | quote }}
   {{- end }}
   rules:
@@ -27,9 +31,7 @@ spec:
           {{- toYaml .Values.ingress.extraPaths | nindent 10 }}
           {{- end }}
           - path: {{ .Values.ingress.path }}
-            {{- if eq "true" (include "common.ingress.supportsPathType" .) }}
             pathType: {{ .Values.ingress.pathType }}
-            {{- end }}
             backend: {{- include "common.ingress.backend" (dict "serviceName" (include "common.names.fullname" .) "servicePort" "http" "context" $)  | nindent 14 }}
     {{- end }}
     {{- range .Values.ingress.extraHosts }}
@@ -37,10 +39,8 @@ spec:
       http:
         paths:
           - path: {{ default "/" .path }}
-            {{- if eq "true" (include "common.ingress.supportsPathType" $) }}
             pathType: {{ default "ImplementationSpecific" .pathType }}
-            {{- end }}
-            backend: {{- include "common.ingress.backend" (dict "serviceName" (include "common.names.fullname" $) "servicePort" "http" "context" $) | nindent 14 }}
+            backend: {{- include "common.ingress.backend" (dict "serviceName" (include "common.names.fullname" .) "servicePort" "http" "context" $)  | nindent 14 }}
     {{- end }}
     {{- if .Values.ingress.extraRules }}
     {{- include "common.tplvalues.render" (dict "value" .Values.ingress.extraRules "context" $) | nindent 4 }}
