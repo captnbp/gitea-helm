@@ -1,0 +1,252 @@
+{{- /*
+Copyright VMware, Inc.
+SPDX-License-Identifier: APACHE-2.0
+*/}}
+
+apiVersion: {{ include "common.capabilities.deployment.apiVersion" . }}
+kind: Deployment
+metadata:
+  name: {{ include "common.names.fullname" . }}
+  namespace: {{ include "common.names.namespace" . | quote }}
+  labels: {{- include "common.labels.standard" ( dict "customLabels" .Values.commonLabels "context" $ ) | nindent 4 }}
+  {{- if .Values.commonAnnotations }}
+  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  {{- end }}
+spec:
+  {{- $podLabels := include "common.tplvalues.merge" ( dict "values" ( list .Values.podLabels .Values.commonLabels ) "context" . ) }}
+  selector:
+    matchLabels: {{- include "common.labels.matchLabels" ( dict "customLabels" $podLabels "context" $ ) | nindent 6 }}
+  {{- if .Values.updateStrategy }}
+  strategy: {{- toYaml .Values.updateStrategy | nindent 4 }}
+  {{- end }}
+  replicas: 1
+  template:
+    metadata:
+      labels: {{- include "common.labels.standard" ( dict "customLabels" $podLabels "context" $ ) | nindent 8 }}
+      {{- if .Values.podAnnotations }}
+      annotations: {{- include "common.tplvalues.render" (dict "value" .Values.podAnnotations "context" $) | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- include "gitea.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "gitea.serviceAccountName" . }}
+      {{- if .Values.podSecurityContext.enabled }}
+      securityContext: {{- omit .Values.podSecurityContext "enabled" | toYaml | nindent 8 }}
+      {{- end }}
+      {{- if .Values.affinity }}
+      affinity: {{- include "common.tplvalues.render" (dict "value" .Values.affinity "context" $) | nindent 8 }}
+      {{- else }}
+      affinity:
+        podAffinity: {{- include "common.affinities.pods" (dict "type" .Values.podAffinityPreset "customLabels" $podLabels "context" $) | nindent 10 }}
+        podAntiAffinity: {{- include "common.affinities.pods" (dict "type" .Values.podAntiAffinityPreset "customLabels" $podLabels "context" $) | nindent 10 }}
+        nodeAffinity: {{- include "common.affinities.nodes" (dict "type" .Values.nodeAffinityPreset.type "key" .Values.nodeAffinityPreset.key "values" .Values.nodeAffinityPreset.values) | nindent 10 }}
+      {{- end }}
+      {{- if .Values.schedulerName }}
+      schedulerName: {{ .Values.schedulerName }}
+      {{- end }}
+      {{- if .Values.topologySpreadConstraints }}
+      topologySpreadConstraints: {{- include "common.tplvalues.render" (dict "value" .Values.topologySpreadConstraints "context" .) | nindent 8 }}
+      {{- end }}
+      priorityClassName: {{ .Values.priorityClassName | quote }}
+      {{- if .Values.nodeSelector }}
+      nodeSelector: {{- include "common.tplvalues.render" (dict "value" .Values.nodeSelector "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.tolerations }}
+      tolerations: {{- include "common.tplvalues.render" (dict "value" .Values.tolerations "context" $) | nindent 8 }}
+      {{- end }}
+      automountServiceAccountToken: {{ .Values.automountServiceAccountToken }}
+      {{- if .Values.hostAliases }}
+      # yamllint disable rule:indentation
+      hostAliases: {{- include "common.tplvalues.render" (dict "value" .Values.hostAliases "context" $) | nindent 8 }}
+      # yamllint enable rule:indentation
+      {{- end }}
+      initContainers:
+        {{- if .Values.initContainers }}
+        {{- include "common.tplvalues.render" (dict "value" .Values.initContainers "context" $) | nindent 8 }}
+        {{- end }}
+        {{- if and .Values.volumePermissions.enabled .Values.persistence.enabled }}
+        - name: volume-permissions
+          image: {{ include "gitea.volumePermissions.image" . }}
+          imagePullPolicy: {{ .Values.volumePermissions.image.pullPolicy | quote }}
+          command:
+            - sh
+            - -c
+            - |
+              mkdir -p "/bitnami/gitea"
+              chown -R "{{ .Values.containerSecurityContext.runAsUser }}:{{ .Values.podSecurityContext.fsGroup }}" "/bitnami/gitea"
+          securityContext:
+            runAsUser: 0
+          {{- if .Values.volumePermissions.resources }}
+          resources: {{- toYaml .Values.volumePermissions.resources | nindent 12 }}
+          {{- else if ne .Values.volumePermissions.resourcesPreset "none" }}
+          resources: {{- include "common.resources.preset" (dict "type" .Values.volumePermissions.resourcesPreset) | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: gitea-data
+              mountPath: /bitnami/gitea
+        {{- end }}
+      containers:
+        - name: {{ include "common.names.fullname" . }}
+          image: {{ template "gitea.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy | quote }}
+          {{- if .Values.command }}
+          command: {{- include "common.tplvalues.render" (dict "value" .Values.command "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.args }}
+          args: {{- include "common.tplvalues.render" (dict "value" .Values.args "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.containerSecurityContext.enabled }}
+          securityContext: {{- omit .Values.containerSecurityContext "enabled" | toYaml | nindent 12 }}
+          {{- end }}
+          env:
+            - name: GITEA__default__RUN_MODE
+              value: "prod"
+            - name: GITEA__cron__ENABLED
+              value: "true"
+            - name: GITEA__metrics__ENABLED
+              value: "true"
+            - name: GITEA__time__DEFAULT_UI_LOCATION
+              value: "Europe/Paris"
+            - name: GITEA__server__HTTP_PORT
+              value: {{ .Values.containerPorts.http | quote }}
+            - name: GITEA__server__SSL_MIN_VERSION
+              value: "TLSv1.2"
+            - name: GITEA__server__SSH_LISTEN_PORT
+              value: {{ .Values.containerPorts.ssh | quote }}
+            - name: GITEA__server__SSH_PORT
+              value: {{ .Values.service.ports.ssh | quote }}
+            - name: GITEA__database__DB_TYPE
+              value: "postgres"
+            - name: GITEA__database__HOST
+              value: "{{ include "gitea.databaseHost" . }}:{{ include "gitea.databasePort" . }}"
+            - name: GITEA__database__NAME
+              value: {{ include "gitea.databaseName" . | quote }}
+            - name: GITEA__database__USER
+              value: {{ include "gitea.databaseUser" . | quote }}
+            - name: GITEA__database__PASSWD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "gitea.databaseSecretName" . }}
+                  key: {{ include "gitea.databasePasswordKey" . | quote }}
+            - name: GITEA__server__START_SSH_SERVER
+              value: "true"
+            - name: GITEA__mailer__ENABLED
+              value: "true"
+            {{- if .Values.smtpHost }}
+            - name: GITEA__mailer__SMTP_ADDR
+              value: {{ .Values.smtpHost | quote }}
+            {{- end }}
+            {{- if .Values.smtpPort }}
+            - name: GITEA__mailer__SMTP_PORT
+              value: {{ .Values.smtpPort | quote }}
+            {{- end }}
+            {{- if .Values.smtpFrom }}
+            - name: GITEA__mailer__FROM
+              value: {{ .Values.smtpFrom | quote }}
+            {{- end }}
+            {{- if .Values.smtpUser }}
+            - name: GITEA__mailer__USER
+              value: {{ .Values.smtpUser | quote }}
+            {{- end }}
+            {{- if or .Values.smtpPassword .Values.smtpExistingSecret }}
+            - name: GITEA__mailer__PASSWD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "gitea.smtpSecretName" . }}
+                  key: smtp-password
+            {{- end }}
+            {{- if .Values.extraEnvVars }}
+            {{- include "common.tplvalues.render" (dict "value" .Values.extraEnvVars "context" $) | nindent 12 }}
+            {{- end }}
+          envFrom:
+            {{- if .Values.extraEnvVarsCM }}
+            - configMapRef:
+                name: {{ include "common.tplvalues.render" (dict "value" .Values.extraEnvVarsCM "context" $) }}
+            {{- end }}
+            {{- if .Values.extraEnvVarsSecret }}
+            - secretRef:
+                name: {{ include "common.tplvalues.render" (dict "value" .Values.extraEnvVarsSecret "context" $) }}
+            {{- end }}
+          {{- if .Values.lifecycleHooks }}
+          lifecycle: {{- include "common.tplvalues.render" (dict "value" .Values.lifecycleHooks "context" $) | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.containerPorts.http }}
+            - name: ssh
+              containerPort: {{ .Values.containerPorts.ssh }}
+          {{- if .Values.customStartupProbe }}
+          startupProbe: {{- include "common.tplvalues.render" (dict "value" .Values.customStartupProbe "context" $) | nindent 12 }}
+          {{- else if .Values.startupProbe.enabled }}
+          startupProbe:
+            httpGet:
+              path: {{ .Values.startupProbe.path }}
+              port: http
+              scheme: HTTPS
+            initialDelaySeconds: {{ .Values.startupProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.startupProbe.successThreshold }}
+            failureThreshold: {{ .Values.startupProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.customLivenessProbe }}
+          livenessProbe: {{- include "common.tplvalues.render" (dict "value" .Values.customLivenessProbe "context" $) | nindent 12 }}
+          {{- else if .Values.livenessProbe.enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.livenessProbe.path }}
+              port: http
+              scheme: HTTPS
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.livenessProbe.successThreshold }}
+            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.customReadinessProbe }}
+          readinessProbe: {{- include "common.tplvalues.render" (dict "value" .Values.customReadinessProbe "context" $) | nindent 12 }}
+          {{- else if .Values.readinessProbe.enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.readinessProbe.path }}
+              port: http
+              scheme: HTTPS
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.readinessProbe.successThreshold }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+          {{- end }}
+          {{- if .Values.resources }}
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          {{- else if ne .Values.resourcesPreset "none" }}
+          resources: {{- include "common.resources.preset" (dict "type" .Values.resourcesPreset) | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/gitea
+            - name: config
+              mountPath: /etc/gitea
+            {{- if .Values.extraVolumeMounts }}
+            {{- include "common.tplvalues.render" (dict "value" .Values.extraVolumeMounts "context" $) | nindent 12 }}
+            {{- end }}
+        {{- if .Values.sidecars }}
+        {{- include "common.tplvalues.render" (dict "value" .Values.sidecars "context" $) | nindent 8 }}
+        {{- end }}
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default (print (include "common.names.fullname" .) "-data") }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: config
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default (print (include "common.names.fullname" .) "-config") }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- if .Values.extraVolumes }}
+        {{- include "common.tplvalues.render" (dict "value" .Values.extraVolumes "context" $) | nindent 8 }}
+        {{- end }}

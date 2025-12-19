@@ -1,0 +1,25 @@
+{{- if and .Values.metrics.enabled .Values.metrics.probe.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: {{ include "common.names.fullname" . }}
+  namespace: {{ default .Release.Namespace .Values.metrics.probe.namespace | quote }}
+  {{- $labels := include "common.tplvalues.merge" ( dict "values" ( list .Values.metrics.probe.labels .Values.commonLabels ) "context" . ) }}
+  labels: {{- include "common.labels.standard" ( dict "customLabels" $labels "context" $ ) | nindent 4 }}
+    {{- if .Values.metrics.probe.additionalLabels }}
+    {{- include "common.tplvalues.render" (dict "value" .Values.metrics.probe.additionalLabels "context" $) | nindent 4 }}
+    {{- end }}
+    app.kubernetes.io/component: unifi-network-application
+  {{- if .Values.commonAnnotations }}
+  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  {{- end }}
+spec:
+  interval: {{ .Values.metrics.probe.interval }}
+  module: {{ .Values.metrics.probe.module }}
+  prober:
+    url: {{ .Values.metrics.probe.prober.url }}
+  targets:
+    staticConfig:
+      static:
+        - https://{{ .Values.ingress.hostname }}/status
+{{- end }}
