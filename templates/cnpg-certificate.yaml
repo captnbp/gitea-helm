@@ -1,4 +1,4 @@
-{{- if and .Values.cnpCluster.enabled .Values.cnpCluster.tls.enabled }}
+{{- if and .Values.postgresql.enabled .Values.postgresql.tls.enabled }}
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:

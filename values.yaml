@@ -58,7 +58,7 @@ extraDeploy: []
 image:
   registry: docker.io
   repository: gitea/gitea
-  tag: 1.25.2-rootless
+  tag: 1.26.0-rootless
   digest: ""
   ## Specify a imagePullPolicy
   ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
@@ -603,30 +603,34 @@ serviceAccount:
 ## CloudNativePG Cluster configuration
 ## Requires CloudNativePG operator to be pre-installed
 ## ref: https://cloudnative-pg.io/
-## @param cnpCluster.enabled Enable CloudNativePG cluster deployment
-## @param cnpCluster.instances Number of PostgreSQL instances (1 for single instance)
-## @param cnpCluster.storage.size Storage size for PostgreSQL data
-## @param cnpCluster.storage.storageClass Storage class for PostgreSQL PVCs
-## @param cnpCluster.storage.pvcTemplate Additional PVC template configuration for PostgreSQL PVCs
-## @param cnpCluster.database.name Database name
-## @param cnpCluster.database.username Database username
-## @param cnpCluster.database.existingSecret Existing secret with database credentials
-## @param cnpCluster.resources Resource requests and limits for PostgreSQL pod
-## @param cnpCluster.affinity Affinity configuration for PostgreSQL pod
-## @param cnpCluster.tolerations Tolerations for PostgreSQL pod
-## @param cnpCluster.nodeSelector Node selector for PostgreSQL pod
-## @param cnpCluster.monitoring.enabled Enable monitoring with PodMonitor
-## @param cnpCluster.backup.enabled Enable Barman plugin WAL backup configuration
+## @param postgresql.enabled Enable CloudNativePG cluster deployment
+## @param postgresql.instances Number of PostgreSQL instances (1 for single instance)
+## @skip postgresql.parameters [object] Postgresql parameters
+## @param postgresql.storage.size Storage size for PostgreSQL data
+## @param postgresql.storage.storageClass Storage class for PostgreSQL PVCs
+## @param postgresql.storage.pvcTemplate Additional PVC template configuration for PostgreSQL PVCs
+## @param postgresql.database.name Database name
+## @param postgresql.database.username Database username
+## @param postgresql.database.existingSecret Existing secret with database credentials
+## @param postgresql.resources Resource requests and limits for PostgreSQL pod
+## @param postgresql.affinity Affinity configuration for PostgreSQL pod
+## @param postgresql.tolerations Tolerations for PostgreSQL pod
+## @param postgresql.nodeSelector Node selector for PostgreSQL pod
+## @param postgresql.monitoring.enabled Enable monitoring with PodMonitor
+## @param postgresql.backup.enabled Enable Barman plugin WAL backup configuration
 ## ref: https://cloudnative-pg.io/plugin-barman-cloud/docs/usage/
-## @param cnpCluster.backup.barmanObjectName Barman ObjectStore name for backup
+## @param postgresql.backup.barmanObjectName Barman ObjectStore name for backup
 ## ref: https://cloudnative-pg.io/plugin-barman-cloud/docs/object_stores/
-## @param cnpCluster.superuserSecret Secret containing superuser credentials for the cluster
-## @param cnpCluster.tls.enabled Enable TLS encryption for the cluster (requires cert-manager)
+## @param postgresql.superuserSecret Secret containing superuser credentials for the cluster
+## @param postgresql.tls.enabled Enable TLS encryption for the cluster (requires cert-manager)
 ## ref: https://cloudnative-pg.io/documentation/current/certificates/#server-tls-secret
 ##
-cnpCluster:
+postgresql:
   enabled: true
   instances: 1
+  parameters:
+      max_connections: "100"
+      shared_buffers: "256MB"
   storage:
     size: 10Gi
     storageClass: ""
@@ -649,7 +653,7 @@ cnpCluster:
     enabled: true
 
 ## External PostgreSQL configuration
-## All of these values are only used when cnpCluster.enabled is set to false
+## All of these values are only used when postgresql.enabled is set to false
 ## @param externalDatabase.host Database host
 ## @param externalDatabase.port Database port number
 ## @param externalDatabase.username Non-root username for gitea
@@ -715,7 +719,7 @@ volumePermissions:
   image:
     registry: docker.io
     repository: bitnami/os-shell
-    tag: 12-debian-12-r16
+    tag: latest
     digest: ""
     pullPolicy: IfNotPresent
     ## Optionally specify an array of imagePullSecrets.
@@ -796,7 +800,7 @@ tls:
 auxiliaryImage:
   registry: ghcr.io
   repository: cloudnative-pg/postgresql
-  tag: 18.1-system-trixie
+  tag: 18.3-system-trixie
   digest: ""
   pullPolicy: IfNotPresent
   ## Optionally specify an array of imagePullSecrets.

@@ -1,4 +1,4 @@
-{{- if .Values.cnpCluster.enabled }}
+{{- if .Values.postgresql.enabled }}
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
@@ -10,66 +10,67 @@ metadata:
   annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
   {{- end }}
 spec:
-  instances: {{ .Values.cnpCluster.instances }}
+  instances: {{ .Values.postgresql.instances }}
   
   postgresql:
+    {{- if .Values.postgresql.parameters }}
     parameters:
-      max_connections: "100"
-      shared_buffers: "256MB"
+      {{- toYaml .Values.postgresql.parameters | nindent 6 }}
+    {{- end }}
   
   bootstrap:
     initdb:
-      database: {{ .Values.cnpCluster.database.name | quote }}
-      owner: {{ .Values.cnpCluster.database.user | quote }}
+      database: {{ .Values.postgresql.database.name | quote }}
+      owner: {{ .Values.postgresql.database.user | quote }}
       secret:
         name: {{ include "gitea.cnp.secretName" . }}
   
   storage:
-    size: {{ .Values.cnpCluster.storage.size | quote }}
-    {{- if .Values.cnpCluster.storage.storageClass }}
-    storageClass: {{ .Values.cnpCluster.storage.storageClass | quote }}
+    size: {{ .Values.postgresql.storage.size | quote }}
+    {{- if .Values.postgresql.storage.storageClass }}
+    storageClass: {{ .Values.postgresql.storage.storageClass | quote }}
     {{- end }}
-    {{- if .Values.cnpCluster.storage.pvcTemplate }}
+    {{- if .Values.postgresql.storage.pvcTemplate }}
     pvcTemplate:
-    {{- toYaml .Values.cnpCluster.storage.pvcTemplate | nindent 6 }}
+    {{- toYaml .Values.postgresql.storage.pvcTemplate | nindent 6 }}
     {{- end }}
-  {{- if .Values.cnpCluster.resources }}
+  {{- if .Values.postgresql.resources }}
   resources:
-  {{- toYaml .Values.cnpCluster.resources | nindent 4 }}
+  {{- toYaml .Values.postgresql.resources | nindent 4 }}
   {{- end }}
-  {{- if .Values.cnpCluster.affinity }}
+  {{- if .Values.postgresql.affinity }}
   affinity:
-  {{- toYaml .Values.cnpCluster.affinity | nindent 4 }}
+  {{- toYaml .Values.postgresql.affinity | nindent 4 }}
   {{- end }}
-  {{- if .Values.cnpCluster.tolerations }}
+  {{- if .Values.postgresql.tolerations }}
   tolerations:
-  {{- toYaml .Values.cnpCluster.tolerations | nindent 4 }}
+  {{- toYaml .Values.postgresql.tolerations | nindent 4 }}
   {{- end }}
-  {{- if .Values.cnpCluster.nodeSelector }}
+  {{- if .Values.postgresql.nodeSelector }}
   nodeSelector:
-  {{- toYaml .Values.cnpCluster.nodeSelector | nindent 4 }}
+  {{- toYaml .Values.postgresql.nodeSelector | nindent 4 }}
   {{- end }}
 
-  {{- if .Values.cnpCluster.monitoring.enabled }}
+  {{- if .Values.postgresql.monitoring.enabled }}
   monitoring:
     enablePodMonitor: true
   {{- end }}
   
-  {{- if .Values.cnpCluster.backup.enabled }}
+  {{- if .Values.postgresql.backup.enabled }}
   backup:
     plugins:
     - name: barman-cloud.cloudnative-pg.io
       isWALArchiver: true
       parameters:
-        barmanObjectName: {{ .Values.cnpCluster.backup.barmanObjectName }}
+        barmanObjectName: {{ .Values.postgresql.backup.barmanObjectName }}
   {{- end }}
 
-  {{- if .Values.cnpCluster.superuserSecret }}
+  {{- if .Values.postgresql.superuserSecret }}
   superuserSecret:
-    name: {{ .Values.cnpCluster.superuserSecret }}
+    name: {{ .Values.postgresql.superuserSecret }}
   {{- end }}
 
-  {{- if .Values.cnpCluster.tls.enabled }}
+  {{- if .Values.postgresql.tls.enabled }}
   certificates:
     serverTLSSecret: {{ include "gitea.cnp.fullname" . }}-crt
     serverCASecret: {{ include "gitea.cnp.fullname" . }}-crt
