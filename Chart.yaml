@@ -29,4 +29,4 @@ maintainers:
 sources:
   - https://lab.frogg.it/doca/gitea-helm
   - https://github.com/go-gitea/gitea
-version: 1.0.1
+version: 1.0.4
