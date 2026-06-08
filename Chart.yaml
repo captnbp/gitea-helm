@@ -8,7 +8,7 @@ annotations:
     - name: os-shell
       image: docker.io/bitnami/os-shell:latest
     - name: postgresql
-      image: ghcr.io/cloudnative-pg/postgresql:18.3-system-trixie
+      image: ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie
 apiVersion: v2
 appVersion: 1.26.2
 dependencies:
@@ -29,4 +29,4 @@ maintainers:
 sources:
   - https://lab.frogg.it/doca/gitea-helm
   - https://github.com/go-gitea/gitea
-version: 1.0.5
+version: 1.0.6
