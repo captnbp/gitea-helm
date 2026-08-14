@@ -58,7 +58,7 @@ extraDeploy: []
 image:
   registry: docker.io
   repository: gitea/gitea
-  tag: 1.26.2-rootless
+  tag: 1.27.2-rootless
   digest: ""
   ## Specify a imagePullPolicy
   ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'

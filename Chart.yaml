@@ -1,16 +1,16 @@
 name: gitea
 annotations:
   category: DevelopmentTools
-  licenses: Apache-2.0
+  licenses: MIT
   images: |
     - name: gitea
-      image: docker.io/gitea/gitea:1.26.2-rootless
+      image: docker.io/gitea/gitea:1.27.2-rootless
     - name: os-shell
       image: docker.io/bitnami/os-shell:latest
     - name: postgresql
       image: ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie
 apiVersion: v2
-appVersion: 1.26.2
+appVersion: 1.27.2
 dependencies:
 - name: common
   repository: oci://registry-1.docker.io/bitnamicharts
@@ -18,7 +18,7 @@ dependencies:
   - bitnami-common
   version: 2.x.x
 description: Gitea is a lightweight code hosting solution. Written in Go, features low resource consumption, easy upgrades and multiple databases.
-home: https://lab.frogg.it/doca/gitea-helm
+home: https://github.com/captnbp/gitea-helm
 icon: https://gitea.com/assets/img/logo.svg
 keywords:
   - gitea
@@ -27,6 +27,6 @@ maintainers:
     email: benoit.pourre@gmail.com
     url: https://github.com/captnbp
 sources:
-  - https://lab.frogg.it/doca/gitea-helm
+  - https://github.com/captnbp/gitea-helm
   - https://github.com/go-gitea/gitea
-version: 1.0.6
+version: 1.0.7
