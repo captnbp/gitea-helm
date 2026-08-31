@@ -4,13 +4,13 @@ annotations:
   licenses: MIT
   images: |
     - name: gitea
-      image: docker.io/gitea/gitea:1.27.2-rootless
+      image: docker.io/gitea/gitea:1.27.3-rootless
     - name: os-shell
       image: docker.io/bitnami/os-shell:latest
     - name: postgresql
       image: ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie
 apiVersion: v2
-appVersion: 1.27.2
+appVersion: 1.27.3
 dependencies:
 - name: common
   repository: oci://registry-1.docker.io/bitnamicharts
@@ -29,4 +29,4 @@ maintainers:
 sources:
   - https://github.com/captnbp/gitea-helm
   - https://github.com/go-gitea/gitea
-version: 1.0.7
+version: 1.0.8
