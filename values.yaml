@@ -58,7 +58,7 @@ extraDeploy: []
 image:
   registry: docker.io
   repository: gitea/gitea
-  tag: 1.27.3-rootless
+  tag: 28.0.0-rootless
   digest: ""
   ## Specify a imagePullPolicy
   ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
@@ -800,7 +800,7 @@ tls:
 auxiliaryImage:
   registry: ghcr.io
   repository: cloudnative-pg/postgresql
-  tag: 18.4-system-trixie
+  tag: 18.6-system-trixie
   digest: ""
   pullPolicy: IfNotPresent
   ## Optionally specify an array of imagePullSecrets.
